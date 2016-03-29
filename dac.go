@@ -8,11 +8,11 @@ type Object struct {
 }
 
 // An ObjectID represents an objects id expressend in a hash
-type ObjectID []byte
+type ObjectID [64]byte
 
 // A Reference points to an object in the graph
 type Reference struct {
-	TargetID []ObjectID
+	TargetID ObjectID
 	Name     string
 }
 
@@ -58,7 +58,7 @@ type ReferenceAdapter interface {
 // IDExtractor extracts object IDs from a given object
 type IDExtractor func(Object) (ObjectID, error)
 
-// NewDACGraph bootstraps a new Graph using the given adapters
+// NewDACGraph bootstraps a new graph using the given adapters
 func NewDACGraph(objAd ObjectAdapter, refAd ReferenceAdapter) (Graph, error) {
 	return Graph{ObjectAdapter: objAd, ReferenceAdapter: refAd}, nil
 }
