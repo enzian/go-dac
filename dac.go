@@ -67,14 +67,15 @@ func NewDACGraph(objAd ObjectAdapter, refAd ReferenceAdapter) (*Graph, error) {
 	return &Graph{ObjectAdapter: objAd, ReferenceAdapter: refAd}, nil
 }
 
-// FindLowesCommonAncestor traverses the graph recursively to find the lowest common ancestor of the given references
-func (g *Graph) FindLowesCommonAncestor(refs ...string) (*Object, error) {
+// FindLowestCommonAncestor traverses the graph recursively to find the lowest common ancestor of the given references
+func (g *Graph) FindLowestCommonAncestor(refs ...string) (*Object, error) {
 	if len(refs) < 2 {
 		return nil, fmt.Errorf("Not enough references given to find ancestor: Found %v but need at least 2", len(refs))
 	}
 
 	if len(refs) > 2 {
-		g.FindLowesCommonAncestor(refs[1:]...)
+		g.FindLowestCommonAncestor(refs[1:]...)
 	}
+
 	return nil, nil
 }
