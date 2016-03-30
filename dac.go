@@ -2,13 +2,15 @@ package dac
 
 import (
 	"fmt"
+
+	"golang.org/x/crypto/sha3"
 )
 
 // Object represents a node in the directed acyclic graph
 type Object struct {
-	ID            ObjectID
-	Content       []byte
-	PredecessorID []ObjectID
+	ID             ObjectID
+	Content        []byte
+	PredecessorIDs []ObjectID
 }
 
 // An ObjectID represents an objects id expressend in a hash
@@ -78,4 +80,26 @@ func (g *Graph) FindLowestCommonAncestor(refs ...string) (*Object, error) {
 	}
 
 	return nil, nil
+}
+
+// AppendNodeToPredecessor adds a new node to the DAC given it's predecessor
+func (g *Graph) AppendNodeToPredecessor(content []byte, predecessors []ObjectID) (*Object, error) {
+	var buf = make([]byte, 0)
+
+	for _, predecessor := range predecessors {
+		buf = append(buf, predecessor[:]...)
+	}
+	buf = append(buf, content...)
+
+	h := ObjectID{}
+	// Compute a 64-byte hash of buf and put it in h.
+	sha3.ShakeSum128(h[:], buf)
+	var obj = Object{}
+	obj.ID = h
+	obj.Content = content
+	obj.PredecessorIDs = append([]ObjectID{}, predecessors...)
+
+	g.ObjectAdapter.Write(obj)
+
+	return &obj, nil
 }
