@@ -1,8 +1,12 @@
 package dac
 
+import (
+	"fmt"
+)
+
 // Object represents a node in the directed acyclic graph
 type Object struct {
-	ID            []ObjectID
+	ID            ObjectID
 	Content       []byte
 	PredecessorID []ObjectID
 }
@@ -59,6 +63,18 @@ type ReferenceAdapter interface {
 type IDExtractor func(Object) (ObjectID, error)
 
 // NewDACGraph bootstraps a new graph using the given adapters
-func NewDACGraph(objAd ObjectAdapter, refAd ReferenceAdapter) (Graph, error) {
-	return Graph{ObjectAdapter: objAd, ReferenceAdapter: refAd}, nil
+func NewDACGraph(objAd ObjectAdapter, refAd ReferenceAdapter) (*Graph, error) {
+	return &Graph{ObjectAdapter: objAd, ReferenceAdapter: refAd}, nil
+}
+
+// FindLowesCommonAncestor traverses the graph recursively to find the lowest common ancestor of the given references
+func (g *Graph) FindLowesCommonAncestor(refs ...string) (*Object, error) {
+	if len(refs) < 2 {
+		return nil, fmt.Errorf("Not enough references given to find ancestor: Found %v but need at least 2", len(refs))
+	}
+
+	if len(refs) > 2 {
+		g.FindLowesCommonAncestor(refs[1:]...)
+	}
+	return nil, nil
 }
