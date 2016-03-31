@@ -47,7 +47,7 @@ type ObjectAdapter interface {
 
 // ReferenceReader reads references
 type ReferenceReader interface {
-	Read(id []byte) (Reference, error)
+	Read(name string) (Reference, error)
 }
 
 // ReferenceWriter persist new/changed references
@@ -82,8 +82,8 @@ func (g *Graph) FindLowestCommonAncestor(refs ...string) (*Object, error) {
 	return nil, nil
 }
 
-// AppendNodeToPredecessor adds a new node to the DAC given it's predecessor
-func (g *Graph) AppendNodeToPredecessor(content []byte, predecessors []ObjectID) (*Object, error) {
+// AppendNode adds a new node to the DAC given it's predecessor without moving any references
+func (g *Graph) AppendNode(content []byte, predecessors ...ObjectID) (*Object, error) {
 	var buf = make([]byte, 0)
 
 	for _, predecessor := range predecessors {
@@ -102,4 +102,19 @@ func (g *Graph) AppendNodeToPredecessor(content []byte, predecessors []ObjectID)
 	g.ObjectAdapter.Write(obj)
 
 	return &obj, nil
+}
+
+// AppendNodeToRef appends a new node to the node specified in the given ref
+func (g *Graph) AppendNodeToRef(content []byte, ref string) (*Object, error) {
+	var foundRef, err = g.ReferenceAdapter.Read(ref)
+	if err != nil {
+		return nil, err
+	}
+
+	newObj, err := g.AppendNode(content, []ObjectID{foundRef.TargetID}...)
+	if err != nil {
+		return nil, err
+	}
+
+	return newObj, nil
 }

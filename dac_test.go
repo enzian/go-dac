@@ -6,16 +6,16 @@ import (
 )
 
 type fakeObjectAdapter struct {
-	objects map[ObjectID]Object
+	objects map[string]Object
 }
 
 func (wr *fakeObjectAdapter) Write(obj Object) error {
-	wr.objects[obj.ID] = obj
+	wr.objects[string(obj.ID[:])] = obj
 	return nil
 }
 
 func (wr *fakeObjectAdapter) Read(id []byte) (Object, error) {
-	var obj, found = wr.objects[id]
+	var obj, found = wr.objects[string(id)]
 	if !found {
 		return Object{}, fmt.Errorf("Cannot find %#x", id)
 	}
@@ -23,33 +23,21 @@ func (wr *fakeObjectAdapter) Read(id []byte) (Object, error) {
 	return obj, nil
 }
 
-func TestXxx(t *testing.T) {
+func TestNodeInsertion(t *testing.T) {
 	// Arrange
 	var fakeAdapter = new(fakeObjectAdapter)
-	fakeAdapter.objects = map[ObjectID]Object{}
+	fakeAdapter.objects = map[string]Object{}
 
 	var graph, err = NewDACGraph(fakeAdapter, nil)
-
 	if err != nil {
+		t.Errorf("Could not initialize the graph correctly: %s", err.Error())
 		t.FailNow()
 	}
 
+	rootObj, _ := graph.AppendNode([]byte("HalloWorld"), []ObjectID{}...)
+
 	// Act
-	obj, err := graph.FindLowestCommonAncestor("master", "feature")
-
-	obj, _ = graph.AppendNodeToPredecessor([]byte("HalloWorld"), nil)
-
-	fmt.Printf("Make Object 1 with ID: %#x \n", obj.ID)
-
-	var obj1, _ = graph.AppendNodeToPredecessor([]byte("HalloWorld"), []ObjectID{obj.ID})
-
-	fmt.Printf("Make Object 2 with ID: %#x \n", obj1.ID)
-	fmt.Printf("Object 2 with predecessors: %#x \n", obj1.PredecessorIDs)
-
-	var obj2, _ = graph.AppendNodeToPredecessor([]byte("HalloWorld"), []ObjectID{obj.ID, obj1.ID})
-
-	fmt.Printf("Make Object 3 with ID: %#x \n", obj2.ID)
-	fmt.Printf("Object 3 with predecessors: %#x \n", obj2.PredecessorIDs)
+	obj, err := graph.AppendNode([]byte("HalloWorld"), rootObj.ID)
 
 	//Assert
 	if err != nil {
@@ -57,6 +45,11 @@ func TestXxx(t *testing.T) {
 	}
 
 	if obj == nil {
+		t.Errorf("Appended node was nil")
+		t.FailNow()
+	}
+	if len(obj.PredecessorIDs) != 1 {
+		t.Errorf("Appended nodes predecessor collection is of unexpected length %v but should be %v", len(obj.PredecessorIDs), 1)
 		t.FailNow()
 	}
 
