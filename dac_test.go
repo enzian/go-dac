@@ -120,3 +120,57 @@ func TestAttachReference(t *testing.T) {
 		t.FailNow()
 	}
 }
+
+/*
+This test builds a more complex DGA and finds the LCA (lowest common ancestor)
+of two given references (source, target):
+
+*   f2fdb6b - objE  (ref:source)
+| * 998b1c4 - objD  (ref:target)
+| * 96a0128 - objC
+| * 5deee5d - objB
+|/
+*   2d9287b4 - objA  (should be the LCA)
+
+
+*/
+func TestFindLca(t *testing.T) {
+	// Arrange
+	var fakeAdapter = new(fakeObjectAdapter)
+	fakeAdapter.objects = map[string]Object{}
+	fakeAdapter.refs = map[string]Reference{}
+	var srcRef, targetRef = "source", "target"
+	var graph, _ = NewDACGraph(fakeAdapter, fakeAdapter)
+
+	objA, err := graph.AppendNode([]byte("HelloWorld"), ObjectID{})
+
+	_, err = graph.Reference(objA.ID, targetRef)
+	_, err = graph.Reference(objA.ID, srcRef)
+
+	_, err = graph.AppendNodeToRef([]byte("HelloWorld"), targetRef)
+	_, err = graph.AppendNodeToRef([]byte("HelloWorld"), targetRef)
+	_, err = graph.AppendNodeToRef([]byte("HelloWorld"), targetRef)
+	_, err = graph.AppendNodeToRef([]byte("HelloWorld"), srcRef)
+
+	if err != nil {
+		t.Errorf("Failed to insert a new node or reference: %s", err.Error())
+		t.FailNow()
+	}
+
+	// Act
+	lcaObject, err := graph.FindLowestCommonAncestor(targetRef, srcRef)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Failed to find LCA: %s", err.Error())
+		t.FailNow()
+	}
+	if lcaObject == nil {
+		t.Errorf("Failed to find LCA because it was Nil.")
+		t.FailNow()
+	}
+	if lcaObject.ID != objA.ID {
+		t.Errorf("Failed to find correct LCA. \n Expected: \n\t %#x \n but found: \n\t %#x \n", objA.ID, lcaObject)
+		t.FailNow()
+	}
+}
