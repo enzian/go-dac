@@ -134,7 +134,7 @@ of two given references (source, target):
 
 
 */
-func TestFindLca(t *testing.T) {
+func TestFindLCA_Simple(t *testing.T) {
 	// Arrange
 	var fakeAdapter = new(fakeObjectAdapter)
 	fakeAdapter.objects = map[string]Object{}
@@ -173,4 +173,39 @@ func TestFindLca(t *testing.T) {
 		t.Errorf("Failed to find correct LCA. \n Expected: \n\t %#x \n but found: \n\t %#x \n", objA.ID, lcaObject)
 		t.FailNow()
 	}
+}
+
+/*
+This test builds a DGA that will produce two LCAs for source and target:
+
+*/
+func TestFindLCA_Multiple(t *testing.T) {
+	// Arrange
+	var fakeAdapter = new(fakeObjectAdapter)
+	fakeAdapter.objects = map[string]Object{}
+	fakeAdapter.refs = map[string]Reference{}
+	var srcRef, tarRef = "source", "target"
+	var graph, _ = NewDACGraph(fakeAdapter, fakeAdapter)
+
+	lcaA, _ := graph.AppendNode([]byte("HelloWorld"), ObjectID{})
+	lcaB, _ := graph.AppendNode([]byte("HelloWorld"), lcaA.ID)
+
+	startA, _ := graph.AppendNode([]byte("HelloWorld"), lcaA.ID, lcaB.ID)
+	startB, _ := graph.AppendNode([]byte("HelloWorld"), lcaB.ID, lcaA.ID)
+
+	var sourceRef, _ = graph.Reference(startA.ID, srcRef)
+	var targetRef, _ = graph.Reference(startB.ID, tarRef)
+
+	// Act
+	var lcaObject, err = graph.FindLowestCommonAncestor(sourceRef.Name, targetRef.Name)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Encountered unexpected error while looking for the lca: %s", err.Error())
+		t.FailNow()
+	} else if lcaObject.ID != lcaA.ID && lcaObject.ID != lcaB.ID {
+		t.Errorf("Looking for lca in graph with multiple lca candidates returned none of the two possible correct lcas")
+		t.FailNow()
+	}
+
 }
