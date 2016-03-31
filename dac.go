@@ -31,12 +31,12 @@ type Graph struct {
 
 // ObjectReader reads objects
 type ObjectReader interface {
-	Read(id []byte) (Object, error)
+	ReadObject(id []byte) (Object, error)
 }
 
 // ObjectWriter persist new/changed objects
 type ObjectWriter interface {
-	Write(obj Object) error
+	WriteObject(obj Object) error
 }
 
 // ObjectAdapter extends read and write capabilities for objects to the graph
@@ -47,12 +47,12 @@ type ObjectAdapter interface {
 
 // ReferenceReader reads references
 type ReferenceReader interface {
-	Read(name string) (Reference, error)
+	ReadReference(name string) (Reference, bool, error)
 }
 
 // ReferenceWriter persist new/changed references
 type ReferenceWriter interface {
-	Write(obj Reference) error
+	WriteReference(obj Reference) error
 }
 
 // ReferenceAdapter extends read and write capabilities for objects to the graph
@@ -99,22 +99,28 @@ func (g *Graph) AppendNode(content []byte, predecessors ...ObjectID) (*Object, e
 	obj.Content = content
 	obj.PredecessorIDs = append([]ObjectID{}, predecessors...)
 
-	g.ObjectAdapter.Write(obj)
+	g.ObjectAdapter.WriteObject(obj)
 
 	return &obj, nil
 }
 
 // AppendNodeToRef appends a new node to the node specified in the given ref
-func (g *Graph) AppendNodeToRef(content []byte, ref string) (*Object, error) {
-	var foundRef, err = g.ReferenceAdapter.Read(ref)
+func (g *Graph) AppendNodeToRef(content []byte, refName string) (*Object, error) {
+	var ref, found, err = g.ReferenceAdapter.ReadReference(refName)
 	if err != nil {
 		return nil, err
 	}
 
-	newObj, err := g.AppendNode(content, []ObjectID{foundRef.TargetID}...)
+	newObj, err := g.AppendNode(content, []ObjectID{ref.TargetID}...)
 	if err != nil {
 		return nil, err
 	}
+
+	if !found {
+		ref.TargetID = newObj.ID
+	}
+
+	g.ReferenceAdapter.WriteReference(ref)
 
 	return newObj, nil
 }
