@@ -124,3 +124,22 @@ func (g *Graph) AppendNodeToRef(content []byte, refName string) (*Object, error)
 
 	return newObj, nil
 }
+
+// Reference attaches a reference to the given object ID
+func (g *Graph) Reference(objectID ObjectID, name string) (Reference, error) {
+	var obj, err = g.ObjectAdapter.ReadObject(objectID[:])
+	if err != nil {
+		return Reference{}, err
+	}
+
+	var ref = Reference{
+		Name:     name,
+		TargetID: obj.ID}
+
+	err = g.ReferenceAdapter.WriteReference(ref)
+	if err != nil {
+		return ref, err
+	}
+
+	return ref, nil
+}

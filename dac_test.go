@@ -58,7 +58,6 @@ func TestNodeInsertion(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
-
 	if obj == nil {
 		t.Errorf("Appended node was nil")
 		t.FailNow()
@@ -90,6 +89,34 @@ func TestNodeInsertion_WithReferences(t *testing.T) {
 	}
 	if masterRef.TargetID != newObj.ID {
 		t.Errorf("Appending a node to reference %s, did not move the reference correctly. Expected position: \n %#x \n but was at: \n %#x", refName, newObj.ID, masterRef.TargetID)
+		t.FailNow()
+	}
+}
+
+func TestAttachReference(t *testing.T) {
+	// Arrange
+	var fakeAdapter = new(fakeObjectAdapter)
+	fakeAdapter.objects = map[string]Object{}
+	fakeAdapter.refs = map[string]Reference{}
+	var refName = "master"
+	var graph, _ = NewDACGraph(fakeAdapter, fakeAdapter)
+
+	var newObj, err = graph.AppendNodeToRef([]byte("HelloWorld"), refName)
+	if err != nil {
+		t.Errorf("Failed to insert a new node to reference %s: %s", refName, err.Error())
+		t.FailNow()
+	}
+
+	// Act
+	ref, err := graph.Reference(newObj.ID, "master")
+
+	// Assert
+	if err != nil {
+		t.Errorf("Creation of reference %s lead to an unexpected error: %s", refName, err.Error())
+		t.FailNow()
+	}
+	if ref.TargetID != newObj.ID {
+		t.Errorf("Reference %s was successfully created but did not point to the correct object id.\n Expected:\n\t %#x \n but found: \n\t %#x", refName, newObj.ID, ref.TargetID)
 		t.FailNow()
 	}
 }
