@@ -93,17 +93,17 @@ func (g *Graph) FindLowestCommonAncestor(refs ...string) (*Object, error) {
 	var rightID ObjectID
 
 	if len(refs) > 2 {
-		var recLeft, err = g.FindLowestCommonAncestor(refs[1:]...)
-		if err != nil {
-			return nil, err
+		var recLeft, recErr = g.FindLowestCommonAncestor(refs[1:]...)
+		if recErr != nil {
+			return nil, recErr
 		} else if recLeft == nil {
 			return nil, fmt.Errorf("Cannot find lowest common ancestor")
 		} else {
 			rightID = recLeft.ID
 		}
 	} else {
-		var rightRef, found, err = g.ReferenceAdapter.ReadReference(refs[1])
-		if err != nil {
+		var rightRef, found, refErr = g.ReferenceAdapter.ReadReference(refs[1])
+		if refErr != nil {
 			return nil, fmt.Errorf("Error while reading reference %s", refs[1])
 		} else if !found {
 			return nil, fmt.Errorf("Cannot find reference %s", refs[1])
@@ -111,70 +111,35 @@ func (g *Graph) FindLowestCommonAncestor(refs ...string) (*Object, error) {
 		rightID = rightRef.TargetID
 	}
 
-	var leftBacklog = make([]*tree.TreeNode, 1)
-	var leftObjectsFound = map[ObjectID]int64{}
-	leftBacklog[0] = &tree.TreeNode{ID: leftID, Depth: 0}
+	// Parses the graph to a tree beginning at the specified id
+	leftNodes, _, err := g.toTree(leftID)
 
-	for len(leftBacklog) > 0 {
-		var currentItem = leftBacklog[0]
-		var currentID = currentItem.ID.(ObjectID)
-
-		if currentID == EmptyID {
-			break
-		}
-
-		var currentObject, err = g.ObjectAdapter.ReadObject(currentID[:])
-		if err != nil {
-			return nil, err
-		}
-
-		for _, ancestor := range currentObject.PredecessorIDs {
-			var ancestorNode = &tree.TreeNode{ID: ancestor, Depth: currentItem.Depth}
-			leftBacklog = append([]*tree.TreeNode{ancestorNode}, leftBacklog...)
-		}
-
-		leftObjectsFound[currentObject.ID] = currentItem.Depth
+	// Find all intersection object with leftNodes
+	// Function that analyzes whether the given object represents a collision
+	var isCollision = func(obj *Object) bool {
+		var _, exists = leftNodes[obj.ID]
+		return exists
 	}
 
-	var rightBacklog = make([]*tree.TreeNode, 1)
-	var collisions = map[ObjectID]int64{}
-	rightBacklog[0] = &tree.TreeNode{ID: rightID, Depth: 0}
-	for len(rightBacklog) > 0 {
-		var currentItem = rightBacklog[0]
-		var currentID = currentItem.ID.(ObjectID)
-
-		if currentID == EmptyID {
-			break
-		}
-
-		var currentObject, err = g.ObjectAdapter.ReadObject(currentID[:])
-		if err != nil {
-			return nil, err
-		}
-
-		if _, exists := leftObjectsFound[currentObject.ID]; exists {
-			collisions[currentObject.ID] = currentItem.Depth
-		}
-
-		for _, ancestor := range currentObject.PredecessorIDs {
-			var ancestorNode = &tree.TreeNode{ID: ancestor, Depth: currentItem.Depth}
-			rightBacklog = append([]*tree.TreeNode{ancestorNode}, leftBacklog...)
-		}
+	// Records the node where a collision happens
+	var collisions = []*tree.TreeNode{}
+	var collisionRecorder = func(node *tree.TreeNode) {
+		collisions = append(collisions, node)
 	}
 
-	if len(collisions) < 1 {
-		return nil, fmt.Errorf("Cannot find a lowest common ancestor for the given objects %#x and %#x", leftID[:8], rightID[:8])
-	}
+	_, _, err = g.toCollisionTerminatedTree(rightID, isCollision, collisionRecorder)
 
 	var shortestCollisionPoint ObjectID
 	var shortestCollisionPathLenght int64
 	shortestCollisionPathLenght = math.MaxInt64
 
-	for k := range collisions {
-		var totalPathLength = collisions[k] + leftObjectsFound[k]
+	// Iterate over all collisions and find the one with the shortest path length
+	for _, k := range collisions {
+		var id = ObjectID(k.ID.(ObjectID))
+		var totalPathLength = k.Depth + leftNodes[id].Depth
 		if totalPathLength < shortestCollisionPathLenght {
 			shortestCollisionPathLenght = totalPathLength
-			shortestCollisionPoint = k
+			shortestCollisionPoint = id
 		}
 	}
 
@@ -184,6 +149,58 @@ func (g *Graph) FindLowestCommonAncestor(refs ...string) (*Object, error) {
 	}
 
 	return &obj, nil
+}
+
+func (g *Graph) toTree(startPoint ObjectID) (map[ObjectID]*tree.TreeNode, *tree.TreeNode, error) {
+	var isCollision = func(obj *Object) bool { return false }
+	var collisionRecorder = func(node *tree.TreeNode) {}
+
+	var foundItems, rootNode, err = g.toCollisionTerminatedTree(startPoint, isCollision, collisionRecorder)
+
+	return foundItems, rootNode, err
+}
+
+func (g *Graph) toCollisionTerminatedTree(startPoint ObjectID, detectCollision func(obj *Object) bool, collisionRecorder func(treeNode *tree.TreeNode)) (map[ObjectID]*tree.TreeNode, *tree.TreeNode, error) {
+	// The backlog holds all nodes that still need to be processed!
+	var backlog = make([]*tree.TreeNode, 1)
+	// The first item in the backlog is the root node
+	var rootNode = &tree.TreeNode{ID: startPoint, Depth: 0}
+	backlog[0] = rootNode
+
+	var foundItems = make(map[ObjectID]*tree.TreeNode)
+
+	// Iterate on the backlong as long as there are items in it!
+	for len(backlog) > 0 {
+		// The current item is always the first item in the backlog
+		var currentItem = backlog[0]
+		// Extract the ObjectID of the object to be processed from the treeNodes Id field
+		var currentID = currentItem.ID.(ObjectID)
+
+		// Stop iterating if we are at the end of the graph
+		if currentID == EmptyID {
+			break
+		}
+
+		// read the actual object for the given object id
+		var currentObject, readErr = g.ObjectAdapter.ReadObject(currentID[:])
+		if readErr != nil {
+			return nil, nil, readErr
+		}
+
+		if detectCollision(&currentObject) {
+			collisionRecorder(currentItem)
+		}
+
+		// all ancestors of an object will be added to the backlog for further processing
+		for _, ancestor := range currentObject.PredecessorIDs {
+			var ancestorNode = currentItem.AppendChild(ancestor)
+			backlog = append([]*tree.TreeNode{ancestorNode}, backlog...)
+		}
+
+		foundItems[currentID] = currentItem
+	}
+
+	return foundItems, rootNode, nil
 }
 
 // AppendNode adds a new node to the DAC given it's predecessor without moving any references

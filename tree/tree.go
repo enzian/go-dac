@@ -3,12 +3,14 @@ package tree
 type TreeNode struct {
 	ID       interface{}
 	Depth    int64
+	Parent   *TreeNode
 	children []*TreeNode
 }
 
-func (tn *TreeNode) AppendChild(id interface{}) {
-	var newNode = TreeNode{ID: id, Depth: tn.Depth + 1}
-	tn.children = append(tn.children, &newNode)
+func (tn *TreeNode) AppendChild(id interface{}) *TreeNode {
+	var newNode = &TreeNode{ID: id, Depth: tn.Depth + 1, Parent: tn}
+	tn.children = append(tn.children, newNode)
+	return newNode
 }
 
 func (tn *TreeNode) IsLeafNode() bool {
