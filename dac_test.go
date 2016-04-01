@@ -177,7 +177,6 @@ func TestFindLCA_Simple(t *testing.T) {
 
 /*
 This test builds a DGA that will produce two LCAs for source and target:
-
 */
 func TestFindLCA_Multiple(t *testing.T) {
 	// Arrange
@@ -207,5 +206,42 @@ func TestFindLCA_Multiple(t *testing.T) {
 		t.Errorf("Looking for lca in graph with multiple lca candidates returned none of the two possible correct lcas")
 		t.FailNow()
 	}
+}
 
+/*
+This test builds a DGA that will be iterated from multiple points to find the LCA
+*/
+func TestFindLCA_MultipleSearchRoots(t *testing.T) {
+	// Arrange
+	var fakeAdapter = new(fakeObjectAdapter)
+	fakeAdapter.objects = map[string]Object{}
+	fakeAdapter.refs = map[string]Reference{}
+	var bRef, cRef, dRef = "B", "C", "D"
+	var graph, _ = NewDACGraph(fakeAdapter, fakeAdapter)
+
+	root, _ := graph.AppendNode([]byte("Root Object"), ObjectID{})
+
+	objB, _ := graph.AppendNode([]byte("Frist Object on B"), root.ID)
+	objB, _ = graph.AppendNode([]byte("Second Object on B"), objB.ID)
+	graph.Reference(objB.ID, bRef)
+
+	objC, _ := graph.AppendNode([]byte("Frist Object on C"), root.ID)
+	objC, _ = graph.AppendNode([]byte("Second Object on C"), objC.ID)
+	graph.Reference(objC.ID, cRef)
+
+	objD, _ := graph.AppendNode([]byte("Frist Object on D"), root.ID)
+	objD, _ = graph.AppendNode([]byte("Second Object on D"), objD.ID)
+	graph.Reference(objD.ID, dRef)
+
+	// Act
+	var lcaObject, err = graph.FindLowestCommonAncestor(bRef, cRef, dRef)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Encountered unexpected error while looking for the lca: %s", err.Error())
+		t.FailNow()
+	} else if lcaObject.ID != root.ID {
+		t.Errorf("Looking up the LCA failed with multiple search roots. Expected %#x but found %#x", root.ID[:4], lcaObject.ID[:4])
+		t.FailNow()
+	}
 }
