@@ -67,6 +67,11 @@ type ReferenceAdapter interface {
 	ReferenceWriter
 }
 
+type GraphAdapter interface {
+	ReferenceAdapter
+	ObjectAdapter
+}
+
 // IDExtractor extracts object IDs from a given object
 type IDExtractor func(Object) (ObjectID, error)
 
@@ -261,6 +266,8 @@ func (g *Graph) Reference(objectID ObjectID, name string) (Reference, error) {
 	if err != nil {
 		return ref, err
 	}
+
+	g.References = append(g.References, ref)
 
 	return ref, nil
 }
