@@ -14,10 +14,12 @@ type ProtoLine struct {
 }
 
 type RefUpdate struct {
-	From    dac.ObjectID
-	To      dac.ObjectID
-	RefName string
+	From                           dac.ObjectID
+	To                             dac.ObjectID
+	findObjectWithGivenPredecessor string
 }
+
+type ObjectUnmarshaller func() <-chan dac.Object
 
 var (
 	PkgLineFlush = ProtoLine{Content: []byte(nil)}
@@ -37,10 +39,25 @@ func RefDiscovery(graph *dac.Graph, sends chan<- ProtoLine) {
 	close(sends)
 }
 
-func ReceiveObjects(graph *dac.Graph, recvLines <-chan ProtoLine, sends chan<- ProtoLine) []RefUpdate {
+func ReceiveObjects(graph *dac.Graph, recvLines <-chan ProtoLine, sends chan<- ProtoLine, objectSrc ObjectUnmarshaller) (map[dac.ObjectID]dac.Object, error) {
 	RefDiscovery(graph, sends)
 	var updates = readReferenceUpdates(recvLines)
-	return updates
+
+	// read all objects from the line
+	var objects = map[dac.ObjectID]dac.Object{}
+	for obj := range objectSrc() {
+		objects[obj.ID] = obj
+	}
+
+	// Check if the existing References can be fast-forwarded to the new objects as recorded in var updates
+	for update := range updates {
+		var canFF, err = findObjectWithGivenPredecessor(objects, update.From, update.To)
+		if err != nil {
+			return nil, fmt.Errorf("Cannot Fast-Forward reference %s from %#x to %#x", update.RefName, update.From[:4], update.To[:4])
+		}
+	}
+
+	return objects, nil
 }
 
 func readReferenceUpdates(recvLines <-chan ProtoLine) []RefUpdate {
@@ -83,4 +100,23 @@ func readReferenceUpdates(recvLines <-chan ProtoLine) []RefUpdate {
 	}
 
 	return updates
+}
+
+func findObjectWithGivenPredecessor(pack dac.Pack, findID dac.ObjectID, startFrom dac.ObjectID) (bool, error) {
+	var backlog = []dac.ObjectID{startFrom}
+
+	for currentObjID := range backlog {
+		var currentObj, inPack = pack[currentObjID]
+		if !inPack {
+			return false, fmt.Errorf("An object pointed to an ancestor (%#x) that is not in the pack", currentObjID[:4])
+		}
+
+		for ancestorID := range currentObj.PredecessorIDs {
+			if ancestorID == findID {
+				return true, nil
+			}
+
+			backlog = append([]dac.ObjectID{ancestorID}, backlog)
+		}
+	}
 }

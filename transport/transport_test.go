@@ -50,10 +50,13 @@ func TestReferenceDiscovery(t *testing.T) {
 
 func TestSendPackage(t *testing.T) {
 	// Arrange
-	var from = "4e0ec4f2bddac0eefa18b8560edf158be96fcaccf6644f1d6a41632c8e31e3cf4e0ec4f2bddac0eefa18b8560edf158be96fcaccf6644f1d6a41632c8e31e3cf"
-	var to = "644f1d6a41632c8e31e3cf4e0ec4f2bdd8be96fcaccf658be96fcaccf6644f1d6a41632c8e31e3cfac0eefa18b8560edf14e0ec4f2bddac0eefa18b8560edf15"
+	var from = dac.IdFromString("4e0ec4f2bddac0eefa18b8560edf158be96fcaccf6644f1d6a41632c8e31e3cf4e0ec4f2bddac0eefa18b8560edf158be96fcaccf6644f1d6a41632c8e31e3cf")
+	var via = dac.IdFromString("ec4f2bdd8be96fcaccf658be96fcaccf644f1d6a41632c8e31e3cf4e06644f1d6aedf14e0ec4f2bddac0eefa18b8560edf1541632c8e31e3cfac0eefa18b8560")
+	var viaContent = []byte("Content VIA")
+	var to = dac.IdFromString("644f1d6a41632c8e31e3cf4e0ec4f2bdd8be96fcaccf658be96fcaccf6644f1d6a41632c8e31e3cfac0eefa18b8560edf14e0ec4f2bddac0eefa18b8560edf15")
+	var toContent = []byte("Content TO")
 	var name = "refs/heads/master"
-	var command = from
+	var command = hex.EncodeToString(from[:])
 	var content = []byte(fmt.Sprintf("%s %s", to, name))
 
 	var sendChan = make(chan ProtoLine, 2)
@@ -68,12 +71,20 @@ func TestSendPackage(t *testing.T) {
 	sendChan <- PkgLineFlush
 	close(sendChan)
 
-	var ret []RefUpdate
+	var ret map[dac.ObjectID]dac.Object
 
 	var unlock = make(chan bool, 1)
 
+	var objectSupplier = func() <-chan dac.Object {
+		var objChan = make(chan dac.Object, 2)
+		objChan <- dac.Object{ID: via, Content: viaContent, PredecessorIDs: []dac.ObjectID{from}}
+		objChan <- dac.Object{ID: to, Content: toContent, PredecessorIDs: []dac.ObjectID{via}}
+		close(objChan)
+		return objChan
+	}
+
 	go func() {
-		ret = ReceiveObjects(graph, sendChan, rcvChan)
+		ret = ReceiveObjects(graph, sendChan, rcvChan, objectSupplier)
 		unlock <- true
 	}()
 
@@ -81,7 +92,12 @@ func TestSendPackage(t *testing.T) {
 
 	// Assert
 
-	assert.Equal(t, 1, len(ret), "Expected to receive 1 update line but did not")
-	assert.Equal(t, from, hex.EncodeToString(ret[0].From[:]), "To points to a false ID")
-	assert.Equal(t, to, hex.EncodeToString(ret[0].To[:]), "To points to a false ID")
+	var resultSize = len(ret)
+	assert.Equal(t, 2, resultSize, "Expected to found two objects in the update package")
+
+	var _, exists = ret[via]
+	assert.Equal(t, true, exists, "Expected the intermediary object 'via' (%#x) to be in the update package.", via[:4])
+
+	_, exists = ret[to]
+	assert.Equal(t, true, exists, "Expected the object 'to' (%#x) to be in the update package", to[:4])
 }

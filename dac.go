@@ -1,6 +1,7 @@
 package dac
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
 
@@ -16,11 +17,17 @@ type Object struct {
 	PredecessorIDs []ObjectID
 }
 
+// ObjectIdSize is the default length in bytes of the objectid
+const ObjectIdSize = 64
+
 // An ObjectID represents an objects id expressend in a hash
-type ObjectID [64]byte
+type ObjectID [ObjectIdSize]byte
 
 // EmptyID describes an empty ID for comparison
 var EmptyID = ObjectID{}
+
+// Pack represents a number of objects indexed via their ObjectIDs
+type Pack map[ObjectID]Object
 
 // A Reference points to an object in the graph
 type Reference struct {
@@ -270,4 +277,12 @@ func (g *Graph) Reference(objectID ObjectID, name string) (Reference, error) {
 	g.References = append(g.References, ref)
 
 	return ref, nil
+}
+
+// IdFromString converts a string to a standard object id
+func IdFromString(id string) ObjectID {
+	var idSlice, _ = hex.DecodeString(id)
+	var objID = ObjectID{}
+	copy(objID[:], idSlice)
+	return objID
 }
